@@ -74,16 +74,16 @@ pipeline {
 			 */
 				script {
 				   try {
-                        sh "docker stop mynodejsapp"
-                     } catch (err) {
-                            echo err.getMessage()
-                    echo "Error detected, but we will continue."
-                         } 
+                       sh "docker stop mynodejsapp"
+                   } catch (err) {
+                   		echo err.getMessage()
+                        echo "Error detected, but we will continue."
+                   } 
 					
-				   dockerImage.run("-p 8096:3000 --rm --name mynodejsapp")
-			}
-		 }
-	  }
+		         	dockerImage.run("-p 8096:3000 --rm --name mynodejsapp")
+				}
+		 	}
+	    }
 	}
 }
 //https://github.com/gustavoapolinario/node-todo-frontend/blob/master/Jenkinsfile

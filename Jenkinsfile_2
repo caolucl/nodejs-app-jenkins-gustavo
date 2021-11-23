@@ -1,0 +1,97 @@
+pipeline {
+    agent any 
+    parameters {
+        choice(name: 'VERSION', choices: ['1.1.0', '1.2.0', '1.3.0'], description: '')
+        booleanParam(name: 'executeTests', defaultValue: true, description: '')
+    }
+
+    environment {
+        //once you sign up for Docker hub, use that user_id here
+        registry = "caolucl/nodeapp_test"
+        //- update your credentials ID after creating credentials for connecting to Docker Hub
+        registryCredential = 'docker-hub'
+        dockerImage = ''
+    }
+    
+    stages {
+        stage('Cloning Git') {
+            steps {
+                checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: '', url: 'https://github.com/gustavoapolinario/node-todo-frontend']]])       
+            }
+        }
+        
+        stage('Build') {
+            steps {
+		    sh 'npm install'
+            }
+	    }
+	    
+	    stage('Test') {
+	        steps {
+		    sh 'npm test'
+	        }
+	    }
+
+		// Building Docker images
+		stage('Building image') {
+		  steps{
+			script {
+			  //dockerImage = docker.build("caolucl/python_test:${env.BUILD_ID}")
+			  dockerImage = docker.build("caolucl/nodeapp_test:${env.BUILD_NUMBER}")
+			}
+		  }
+		}
+
+		 // Uploading Docker images into Docker Hub
+		stage('Upload Image') {
+		 steps{    
+			 script {
+				docker.withRegistry( 'https://registry.hub.docker.com', registryCredential ) {
+				dockerImage.push()
+				}
+			}
+		  }
+		}
+
+		 // Stopping Docker containers for cleaner Docker run
+		 stage('docker remove images') {
+			 steps {
+				sh "docker rmi $registry:$BUILD_NUMBER"
+				//sh "docker rmi $registry:latest" 
+				//sh 'docker ps -f name=mypythonappContainer -q | xargs --no-run-if-empty docker container stop'
+				//sh 'docker container ls -a -fname=mypythonappContainer -q | xargs -r docker container rm'
+			 }
+		   }
+
+		// Running Docker container, make sure port 8096 is opened in 
+		stage('Docker Run') {
+			steps{
+			 /*
+			 script {
+				sh "docker stop mynodejsapp"
+				dockerImage.run("-p 8096:3000 --rm --name mynodejsapp")
+			 }
+			 */
+				script {
+					Exception caughtException = null
+
+					catchError(buildResult: 'SUCCESS', stageResult: 'ABORTED') { 
+					try { 
+						sh "docker stop mynodejsapp"
+					} catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
+						error "Caught ${e.toString()}" 
+					} catch (Throwable e) {
+						caughtException = e
+					}
+				}
+
+				if (caughtException) {
+					error caughtException.message
+				}
+				dockerImage.run("-p 8096:3000 --rm --name mynodejsapp")
+			}
+		 }
+	  }
+	}
+}
+//https://github.com/gustavoapolinario/node-todo-frontend/blob/master/Jenkinsfile
